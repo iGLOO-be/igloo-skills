@@ -17,7 +17,14 @@ Fournir un **CLI deterministe** que l'agent merge execute a chaque heartbeat pou
 
 ## Emplacement
 
-Racine du skill : **`skills/merge-pr-manager/`** (portable, pas de couplage `~/.cursor`).
+Le skill est installe par Paperclip dans `~/.cursor/skills/merge-pr-manager--<hash>/`. Les scripts se trouvent dans le sous-dossier `scripts/` relatif a ce chemin.
+
+Pour localiser le script depuis n'importe quel workspace :
+
+```bash
+SKILL_DIR=$(ls -d ~/.cursor/skills/merge-pr-manager--* 2>/dev/null | head -1)
+bash "$SKILL_DIR/scripts/list-pr-status.sh" [OPTIONS] OWNER REPO
+```
 
 ## Prerequis
 
@@ -29,9 +36,8 @@ Racine du skill : **`skills/merge-pr-manager/`** (portable, pas de couplage `~/.
 ### Usage
 
 ```bash
-# Depuis la racine du depot
-bash skills/merge-pr-manager/scripts/list-pr-status.sh OWNER REPO
-bash skills/merge-pr-manager/scripts/list-pr-status.sh https://github.com/OWNER/REPO
+bash "$SKILL_DIR/scripts/list-pr-status.sh" OWNER REPO
+bash "$SKILL_DIR/scripts/list-pr-status.sh" https://github.com/OWNER/REPO
 
 # Options
 #   --prefix PREFIX   Prefixe Paperclip (defaut: FOL)
@@ -42,14 +48,16 @@ bash skills/merge-pr-manager/scripts/list-pr-status.sh https://github.com/OWNER/
 ### Exemples concrets
 
 ```bash
+SKILL_DIR=$(ls -d ~/.cursor/skills/merge-pr-manager--* 2>/dev/null | head -1)
+
 # Tableau Markdown de toutes les PR ouvertes
-bash skills/merge-pr-manager/scripts/list-pr-status.sh Foldio foldio-app
+bash "$SKILL_DIR/scripts/list-pr-status.sh" Foldio foldio-app
 
 # JSON des PR agent uniquement, prefixe PAP
-bash skills/merge-pr-manager/scripts/list-pr-status.sh --prefix PAP --agent-only --json Foldio foldio-app
+bash "$SKILL_DIR/scripts/list-pr-status.sh" --prefix PAP --agent-only --json Foldio foldio-app
 
 # Depuis une URL
-bash skills/merge-pr-manager/scripts/list-pr-status.sh --agent-only https://github.com/Foldio/foldio-app
+bash "$SKILL_DIR/scripts/list-pr-status.sh" --agent-only https://github.com/Foldio/foldio-app
 ```
 
 ### Champs calcules
@@ -95,7 +103,8 @@ Le prefixe est configurable via `--prefix` (defaut `FOL`).
 
 1. **Executer le CLI** :
    ```bash
-   bash skills/merge-pr-manager/scripts/list-pr-status.sh --prefix FOL --agent-only --json OWNER REPO
+   SKILL_DIR=$(ls -d ~/.cursor/skills/merge-pr-manager--* 2>/dev/null | head -1)
+   bash "$SKILL_DIR/scripts/list-pr-status.sh" --prefix FOL --agent-only --json OWNER REPO
    ```
 
 2. **Iterer sur le JSON** et traiter chaque PR selon `action` :

@@ -18,7 +18,8 @@ Fetch the company agents (`GET /api/companies/{companyId}/agents`) and find the 
 ### Step 1: Triage PRs
 
 ```bash
-bash skills/merge-pr-manager/scripts/list-pr-status.sh \
+SKILL_DIR=$(ls -d ~/.cursor/skills/merge-pr-manager--* 2>/dev/null | head -1)
+bash "$SKILL_DIR/scripts/list-pr-status.sh" \
   --prefix PREFIX --agent-only --json OWNER REPO
 ```
 
@@ -94,7 +95,7 @@ heartbeat
   │
   ├─ Identify Coder agent via agent list
   │
-  ├─ Run list-pr-status.sh --prefix PREFIX --agent-only --json
+  ├─ Locate skill dir, run list-pr-status.sh --prefix PREFIX --agent-only --json
   │
   ├─ For each PR (if paperclip_ref present):
   │   ├─ action=merge         → gh pr merge + issue done
