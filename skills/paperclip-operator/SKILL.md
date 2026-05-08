@@ -74,6 +74,26 @@ Always pipe through `jq` for readable output.
 
 ---
 
+## API Route Patterns
+
+The API uses **two distinct route families** — do NOT mix them:
+
+| Operation | Path | Scope |
+|---|---|---|
+| List / search / create issues | `POST /api/companies/{companyId}/issues` | Company-scoped |
+| Get / update a single issue | `PATCH /api/issues/{issueId}` | Direct by UUID |
+| Add comment | `POST /api/issues/{issueId}/comments` | Direct by UUID |
+| Create/update document | `PUT /api/issues/{issueId}/documents/{key}` | Direct by UUID |
+| Get document | `GET /api/issues/{issueId}/documents/{key}` | Direct by UUID |
+| List / search agents | `GET /api/companies/{companyId}/agents` | Company-scoped |
+| Get agent details | `GET /api/agents/{agentId}` | Direct by UUID |
+| List human users | `GET /api/companies/{companyId}/user-directory` | Company-scoped |
+| List projects | `GET /api/companies/{companyId}/projects` | Company-scoped |
+
+**Key rule:** collection endpoints (list, search, create) require `/api/companies/{companyId}/...`. Single-resource endpoints (get, update, documents, comments) use `/api/issues/{issueId}` or `/api/agents/{agentId}` directly — no company prefix.
+
+---
+
 ## Critical: Description vs Document
 
 Paperclip **truncates** issue `description` fields when they are too long. Markdown **documents** (e.g. `plan`) are stored without truncation.
@@ -175,6 +195,10 @@ ISSUE_ID=$(curl -sS -X POST "$PAPERCLIP_API_URL/api/companies/$PAPERCLIP_COMPANY
 echo "Created issue: $ISSUE_ID"
 ```
 
+After creation, **always report back** to the user:
+- The issue identifier (e.g. `IGLAA-74`)
+- The board URL: `$PAPERCLIP_API_URL/<prefix>/issues/<identifier>` (extract `prefix` from the identifier, e.g. `IGLAA` from `IGLAA-74`; the prefix part is everything before the dash-number suffix)
+
 If the user provided a plan or long-form content, **immediately** attach it as a document:
 
 ```bash
@@ -196,7 +220,8 @@ Available fields:
 | `description` | no | short summary only (truncated if long!) |
 | `status` | no | `backlog`, `todo`, `in_progress`, `in_review`, `done`, `blocked`, `cancelled` |
 | `priority` | no | `critical`, `high`, `medium`, `low` |
-| `assigneeAgentId` | no | agent UUID |
+| `assigneeAgentId` | no | agent UUID (mutually exclusive with `assigneeUserId`) |
+| `assigneeUserId` | no | human user `principalId` (mutually exclusive with `assigneeAgentId`) |
 | `parentId` | no | parent issue UUID |
 | `projectId` | no | project UUID |
 | `goalId` | no | goal UUID |
@@ -205,7 +230,45 @@ Available fields:
 
 Use `jq -n` with `--arg`/`--argjson` to build the JSON body safely — never hand-craft JSON strings with embedded markdown.
 
-### 7. Update an Issue
+### 7. Create Issue with Plan from File
+
+When the plan content exists as a local file (e.g. a `.plan.md` Cursor plan file), read it directly from disk instead of embedding it in the curl body. Plan files often have YAML frontmatter that must be stripped first.
+
+```bash
+# Step 1 — Create the issue (short description only)
+ISSUE_ID=$(curl -sS -X POST "$PAPERCLIP_API_URL/api/companies/$PAPERCLIP_COMPANY_ID/issues" \
+  -H "Authorization: Bearer $PAPERCLIP_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d "$(jq -n \
+    --arg title "Issue title" \
+    --arg description "Short summary (1-3 sentences)." \
+    --arg status "todo" \
+    --arg priority "medium" \
+    '{title: $title, description: $description, status: $status, priority: $priority}'
+  )" | jq -r '.id')
+
+# Step 2 — Strip YAML frontmatter and attach as plan document
+PLAN_FILE="/path/to/plan.md"
+PLAN_TMPFILE=$(mktemp)
+awk 'BEGIN{s=0} /^---$/{s++; next} s>=2{print}' "$PLAN_FILE" > "$PLAN_TMPFILE"
+
+curl -sS -X PUT "$PAPERCLIP_API_URL/api/issues/$ISSUE_ID/documents/plan" \
+  -H "Authorization: Bearer $PAPERCLIP_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d "$(jq -n \
+    --arg title "Plan" \
+    --rawfile body "$PLAN_TMPFILE" \
+    '{title: $title, format: "markdown", body: $body, baseRevisionId: null}'
+  )"
+
+rm "$PLAN_TMPFILE"
+```
+
+The `awk` command strips everything between the first two `---` lines (YAML frontmatter). `jq --rawfile` reads the file content into a JSON-safe string — no manual escaping needed.
+
+After both steps, report the issue identifier and board URL to the user (see workflow 6).
+
+### 8. Update an Issue
 
 ```bash
 curl -sS -X PATCH "$PAPERCLIP_API_URL/api/issues/<issue-id>" \
@@ -218,9 +281,9 @@ curl -sS -X PATCH "$PAPERCLIP_API_URL/api/issues/<issue-id>" \
   )" | jq .
 ```
 
-Updatable fields: `title`, `description`, `status`, `priority`, `assigneeAgentId`, `projectId`, `goalId`, `parentId`, `billingCode`, `blockedByIssueIds`, `comment`.
+Updatable fields: `title`, `description`, `status`, `priority`, `assigneeAgentId`, `assigneeUserId`, `projectId`, `goalId`, `parentId`, `billingCode`, `blockedByIssueIds`, `comment`.
 
-### 8. Add a Comment
+### 9. Add a Comment
 
 ```bash
 curl -sS -X POST "$PAPERCLIP_API_URL/api/issues/<issue-id>/comments" \
@@ -229,7 +292,7 @@ curl -sS -X POST "$PAPERCLIP_API_URL/api/issues/<issue-id>/comments" \
   -d "$(jq -n --arg body "Comment in **markdown**." '{body: $body}')" | jq .
 ```
 
-### 9. Create or Update a Plan Document
+### 10. Create or Update a Plan Document
 
 Create a plan for an issue:
 
@@ -279,7 +342,7 @@ curl -sS -X PUT "$PAPERCLIP_API_URL/api/issues/<issue-id>/documents/plan" \
   )" | jq .
 ```
 
-### 10. List Agents
+### 11. List Agents
 
 ```bash
 curl -sS "$PAPERCLIP_API_URL/api/companies/$PAPERCLIP_COMPANY_ID/agents" \
@@ -293,14 +356,39 @@ curl -sS "$PAPERCLIP_API_URL/api/agents/<agent-id>" \
   -H "Authorization: Bearer $PAPERCLIP_API_KEY" | jq .
 ```
 
-### 11. List Projects
+### 12. List Human Users
+
+```bash
+curl -sS "$PAPERCLIP_API_URL/api/companies/$PAPERCLIP_COMPANY_ID/user-directory" \
+  -H "Authorization: Bearer $PAPERCLIP_API_KEY" | jq '.users[] | {principalId, status, name: .user.name, email: .user.email}'
+```
+
+Use the `principalId` value as `assigneeUserId` when creating or updating issues.
+
+**Assignee rules:**
+- An issue can have either `assigneeAgentId` (AI agent) **or** `assigneeUserId` (human) — never both.
+- To reassign from agent to human (or vice versa), set the new field and null the other:
+
+```bash
+curl -sS -X PATCH "$PAPERCLIP_API_URL/api/issues/<issue-id>" \
+  -H "Authorization: Bearer $PAPERCLIP_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d "$(jq -n \
+    --arg assigneeUserId "<principalId>" \
+    '{assigneeUserId: $assigneeUserId, assigneeAgentId: null}'
+  )" | jq .
+```
+
+When the user asks to assign to a person by name, fetch the user directory, match by `name` (case-insensitive), and use their `principalId`.
+
+### 13. List Projects
 
 ```bash
 curl -sS "$PAPERCLIP_API_URL/api/companies/$PAPERCLIP_COMPANY_ID/projects" \
   -H "Authorization: Bearer $PAPERCLIP_API_KEY" | jq '.[] | {id, name, status, description}'
 ```
 
-### 12. Approvals
+### 14. Approvals
 
 List pending approvals:
 
@@ -323,7 +411,7 @@ curl -sS -X POST "$PAPERCLIP_API_URL/api/approvals/<approval-id>/reject" \
   -d '{"decisionNote": "Rejected — reason here."}' | jq .
 ```
 
-### 13. Activity Log
+### 15. Activity Log
 
 ```bash
 curl -sS "$PAPERCLIP_API_URL/api/companies/$PAPERCLIP_COMPANY_ID/activity" \
