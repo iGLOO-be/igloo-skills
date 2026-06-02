@@ -1,16 +1,18 @@
-# PR Review — Spec rubric (subagent)
+# Verify Spec — Gate mode rubric (subagent)
 
-Used by **explore** subagent when `context.specCheck === true`. Parent maps drifts to pr-review severities.
+Used when **pr-review** delegates spec conformance on an open PR. The explore subagent runs verify-spec Phases 1–3 in gate mode and returns JSON only — no audit report, no user-facing STOP.
 
 ## Input
 
-- `context.json` from `fetch-pr-review-context.sh`
-- `diffPath` — PR diff
-- Paperclip: run `scripts/fetch-paperclip-spec.sh --check-auth` then `scripts/fetch-paperclip-spec.sh <ID> --markdown` (default `--spec-source auto` → **fix-prd** > plan rev 1). Use **`specReference`** body only — never `plan` latest for gate. Optional `--include-architect-plan` for context.
+- `context.json` from pr-review `fetch-pr-review-context.sh`
+- `diffPath` — PR diff (scope = changed files only)
+- Paperclip: run `scripts/fetch-paperclip-spec.sh --check-auth` then `scripts/fetch-paperclip-spec.sh <ID> --markdown` (default `--spec-source auto` → **fix-prd** > plan rev 1). Use **`specReference`** body only — never `plan` latest for gate.
 - ClickUp: MCP `clickup_get_task` if URLs/IDs provided by orchestrator
-- Rules: [spec-baseline.md](spec-baseline.md) (same skill directory)
+- Rules: [spec-baseline.md](spec-baseline.md)
 
 ## Output format (JSON only)
+
+Return **only** this JSON (no prose):
 
 ```json
 {
@@ -38,7 +40,7 @@ Used by **explore** subagent when `context.specCheck === true`. Parent maps drif
 }
 ```
 
-## Severity mapping (orchestrator applies)
+## Severity mapping (pr-review parent applies)
 
 | Drift | severity |
 |-------|----------|
@@ -48,6 +50,6 @@ Used by **explore** subagent when `context.specCheck === true`. Parent maps drif
 
 ## Conflict protocol
 
-If ClickUp vs Paperclip conflict: populate `conflicts` array with details. **Do not** emit findings on contested requirements — orchestrator STOPs and asks PO.
+If ClickUp vs Paperclip conflict: populate `conflicts` array with details. **Do not** emit findings on contested requirements — pr-review STOPs and asks PO.
 
 Never hand off to paperclip-triage-issue — fixes belong on the PR.

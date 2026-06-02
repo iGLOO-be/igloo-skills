@@ -1,57 +1,71 @@
 ---
 name: verify-spec
 description: >-
-  Standalone product audit: compares implementation (PR, branch, or main) against
-  the original ClickUp task and/or Paperclip issue spec. Produces a full conformance
-  matrix and drift analysis. Routes fixes through paperclip-triage-issue only for post-merge
-  or out-of-PR corrections — not for open PRs (use pr-review instead).
-  Use when the user says "audit spec", "verify spec", "drift analysis",
-  "did we ship what was promised", or post-merge conformance checks.
+  Spec conformance owner: ClickUp/Paperclip baseline, gate-mode JSON for pr-review,
+  and full product audit (matrix, drift analysis). Gate mode runs when pr-review
+  detects spec refs; audit mode for post-merge or standalone reports. Routes fixes
+  through paperclip-triage-issue only post-merge. Use for "audit spec", "verify spec",
+  "drift analysis", or when invoked by pr-review for spec gate.
 ---
 
 # Verify Spec
 
-**Product audit** — not the merge gate. For open PRs with spec refs, use **pr-review** instead; it posts findings to GitHub and blocks merge. Use verify-spec when you need the full report, post-merge validation, or fixes outside the PR branch.
+**Owner of all spec logic** — baseline, Paperclip fetch, conformance matrix, gate output for merge, and full audit reports.
 
 Communicate with the user in French. Code citations and commit messages stay in English.
 
 ## Skill root (portable)
 
-Directory containing this `SKILL.md` — when installed via `npx skills add`, typically **`.agents/skills/verify-spec/`**. Shared spec logic lives in the **pr-review** skill: `.agents/skills/pr-review/spec-baseline.md` and `.agents/skills/pr-review/scripts/fetch-paperclip-spec.sh`.
+Directory containing this `SKILL.md` — when installed via `npx skills add`, typically **`.agents/skills/verify-spec/`**. Also discoverable at `.cursor/skills/verify-spec/` in projects that vendor skills locally.
+
+| File | Role |
+|------|------|
+| [spec-baseline.md](spec-baseline.md) | Spec resolution, precedence, statuses, audit template |
+| [gate-rubric.md](gate-rubric.md) | JSON output schema for pr-review gate |
+| [scripts/fetch-paperclip-spec.sh](scripts/fetch-paperclip-spec.sh) | Paperclip spec fetch |
+| [examples.md](examples.md) | Usage examples |
 
 ## When to use which skill
 
 | Situation | Skill |
 |-----------|-------|
-| PR ouverte, gate merge (code + spec) | **pr-review** |
-| Rapport produit complet, audit post-merge | **verify-spec** |
+| PR ouverte, gate merge (code + spec) | **pr-review** (delegates spec to verify-spec gate mode when installed) |
+| Rapport produit complet, audit post-merge | **verify-spec** audit mode |
 | Bug signalé / symptôme à valider | **paperclip-triage-issue** |
 | Drift spec sur PR ouverte | **pr-review** — jamais triage |
 | Drift confirmé, déjà mergé ou fix hors PR | **verify-spec** → **paperclip-triage-issue** (si user confirme) |
 
-## Inputs
+## Gate mode (pr-review delegation)
+
+**Trigger:** pr-review Step 1B when `specCheck === true` and this skill is installed.
+
+**Do not** produce the audit report template. **Do not** STOP for user in gate mode — return JSON to the pr-review parent only.
+
+1. **Phase 1 — Load spec baseline** — [spec-baseline.md](spec-baseline.md); run `scripts/fetch-paperclip-spec.sh` for Paperclip IDs (mandatory).
+2. **Phase 2 — Load implementation** — PR diff from `context.json` / `diffPath` only; read full files where needed.
+3. **Phase 3 — Conformance** — evaluate FR/AC per spec-baseline; output **only** JSON per [gate-rubric.md](gate-rubric.md).
+
+If `conflicts` non-empty → pr-review parent STOPs and asks PO.
+
+## Audit mode (standalone)
+
+**Trigger:** user invokes `@verify-spec` directly, or post-merge / branch / main scope.
 
 At least **one spec source** and **one implementation scope**:
 
 | Implementation scope | How to resolve |
 |---------------------|----------------|
-| Open PR | Number/URL — prefer **pr-review** instead unless user explicitly wants audit-only |
+| Open PR | Prefer **pr-review** for merge gate; proceed audit-only if user insists |
 | Branch | Current branch or named ref vs `main` diff |
 | Merged / main | `git diff main...ref` or inspect production paths on `main` |
 
-| Spec source | See pr-review [spec-baseline.md](../pr-review/spec-baseline.md) when both skills are installed |
+If the user provides an **open PR** without audit-only intent, suggest **pr-review**:
 
-If the user provides an **open PR** without asking for audit-only, **redirect** to pr-review:
-
-> Pour une PR ouverte, utilisez **pr-review** — il vérifie la spec et poste les findings sur GitHub. **verify-spec** sert à l'audit produit (post-merge ou rapport complet).
-
-Proceed with verify-spec only if the user insists on audit-only or scope is not an open PR gate.
-
-## Workflow
+> Pour une PR ouverte avec gate merge (code + spec + commentaires GitHub), utilisez **pr-review**. **verify-spec** audit mode sert au rapport complet ou post-merge.
 
 ### Phase 1 — Load spec baseline
 
-Read pr-review [spec-baseline.md](../pr-review/spec-baseline.md). For Paperclip identifiers, run `fetch-paperclip-spec.sh` from the pr-review skill scripts directory (mandatory — no « API indisponible » without running it).
+Read [spec-baseline.md](spec-baseline.md). Run `scripts/fetch-paperclip-spec.sh` for Paperclip (mandatory — no « API indisponible » without running it).
 
 ### Phase 2 — Load implementation
 
@@ -90,19 +104,7 @@ Execute **only when all** are true:
 
 1. Read the project's installed **paperclip-triage-issue** skill (typically `.agents/skills/paperclip-triage-issue/SKILL.md`).
 2. Group drifts by root cause.
-3. For each group, formulate claim:
-
-   ```markdown
-   ## Claim (from verify-spec — post-merge)
-
-   **Symptom** : [user-observable gap vs spec]
-   **Where** : [route, component, procedure]
-   **When** : [conditions]
-   **Spec reference** : [FR-/AC- ID + excerpt]
-   **Evidence** : [`path:Lstart-Lend` — actual vs expected]
-   **Context** : [merged in PR #N / on main since DATE / fix outside original branch]
-   ```
-
+3. For each group, formulate claim (see [examples.md](examples.md)).
 4. Run triage Phase 2–3 (investigate + Fix PRD). Gap is pre-validated — produce Fix PRD, do not re-debate existence.
 5. Present Fix PRD(s). **STOP for approval** before Paperclip (triage Phase 4).
 6. On approval, triage Phase 4 (issue + fix-prd + assign architect).
@@ -114,10 +116,9 @@ Execute **only when all** are true:
 - No Paperclip issues without user approval (via triage Phase 4).
 - No triage handoff from open-PR drifts.
 - Resolve Paperclip company/project via paperclip-triage-issue Phase 4.0 — never default to first company.
+- Gate mode: JSON only, no audit report, no Paperclip issue creation.
 
 ## Additional resources
 
-- Shared spec logic: pr-review [spec-baseline.md](../pr-review/spec-baseline.md)
-- Paperclip fetch script: pr-review [scripts/fetch-paperclip-spec.sh](../pr-review/scripts/fetch-paperclip-spec.sh)
 - Examples: [examples.md](examples.md)
-- Merge gate: **pr-review** skill
+- Merge orchestrator: **pr-review** skill

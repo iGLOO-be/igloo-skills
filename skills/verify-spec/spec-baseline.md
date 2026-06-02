@@ -1,6 +1,6 @@
-# Spec Baseline (shared)
+# Spec Baseline
 
-Shared by **pr-review** (spec subagent) and **verify-spec**. Do not duplicate — link here.
+Owned by **verify-spec** — single source of truth for spec resolution, conformance, and audit reporting. **pr-review** delegates spec checks here when installed; it does not duplicate this file.
 
 Communicate with the user in French when presenting results.
 
@@ -15,7 +15,7 @@ Communicate with the user in French when presenting results.
 
 **Never** report « API indisponible » without running the script.
 
-From the **pr-review skill root** (typically `.agents/skills/pr-review/`):
+From the **verify-spec skill root** (typically `.agents/skills/verify-spec/`):
 
 ```bash
 bash scripts/fetch-paperclip-spec.sh --check-auth
@@ -83,7 +83,7 @@ Evidence required for non-✅: `path:Lstart-Lend`. No guessing.
 
 ClickUp vs Paperclip specReference conflict → STOP, ask PO.
 
-## Map drifts → pr-review severity
+## Map drifts → pr-review severity (gate mode)
 
 | Drift | Severity | Dimension |
 |-------|----------|-----------|
@@ -97,7 +97,7 @@ Resolve Paperclip company/project from `AGENTS.md` workspace facts, ClickUp fold
 
 ## Full audit report template
 
-Use for **verify-spec** Phase 4:
+Use for **verify-spec audit mode** Phase 4:
 
 ```markdown
 # Rapport de conformité — [Feature title]

@@ -82,9 +82,9 @@ Voir spec-baseline **Spec conflict protocol** — STOP avant matrice, demander s
 
 ---
 
-## Exemple 6 — pr-review (référence croisée)
+## Exemple 6 — pr-review gate mode (référence croisée)
 
-Pour PR #187 ouverte, le même AC-2 apparaît comme finding pr-review :
+Pour PR #187 ouverte, **pr-review** délègue à verify-spec gate mode ; le même AC-2 apparaît comme finding :
 
 ```markdown
 #### 1. export-csv.ts:55 — [AC-2] Export row limit missing [NEW]
