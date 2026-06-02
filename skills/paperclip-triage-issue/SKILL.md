@@ -18,7 +18,7 @@ Analyze a claim, investigate the source, validate or invalidate, and produce an 
 
 | Situation | Skill |
 |-----------|-------|
-| PR ouverte — code + spec, gate merge | **pr-review** Step 4b ([spec-baseline.md](../spec-baseline.md)) |
+| PR ouverte — code + spec, gate merge | **pr-review** Step 4b (project **spec-baseline.md** when installed) |
 | Audit produit / post-merge / rapport complet | **verify-spec** |
 | Bug report / symptôme à valider | **paperclip-triage-issue** |
 | Drift spec sur PR ouverte | **pr-review** — fix sur la PR, **jamais triage** |
@@ -26,7 +26,7 @@ Analyze a claim, investigate the source, validate or invalidate, and produce an 
 
 **pr-review** never creates Paperclip issues or hands off to triage for spec gaps — drifts become inline PR findings and `REQUEST_CHANGES`.
 
-When **verify-spec** routes here (Phase 5, post-merge only), the gap is **pre-validated**. Run triage Phase 2–3 for root cause + Fix PRD; do not re-debate whether the drift exists. Claim format: see verify-spec [examples.md](../verify-spec/examples.md).
+When **verify-spec** routes here (Phase 5, post-merge only), the gap is **pre-validated**. Run triage Phase 2–3 for root cause + Fix PRD; do not re-debate whether the drift exists. Claim format: see the project's **verify-spec** skill `examples.md` when that skill is installed locally.
 
 ## Workflow
 
