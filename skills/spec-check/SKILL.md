@@ -4,8 +4,8 @@ description: >-
   Spec conformance owner: ClickUp/Paperclip baseline, gate-mode JSON for pr-review,
   and full product audit (matrix, drift analysis). Gate mode runs when pr-review
   detects spec refs; audit mode for post-merge or standalone reports. Routes fixes
-  through paperclip-triage-issue only post-merge. Use for "audit spec", "verify spec",
-  "drift analysis", or when invoked by pr-review for spec gate.
+  through paperclip-triage-issue only post-merge. Use for "audit spec", "spec check",
+  "verify spec", "drift analysis", or when invoked by pr-review for spec gate.
 ---
 
 # Spec Check
