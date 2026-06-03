@@ -6,7 +6,7 @@ description: >-
   Paperclip is configured, send it to the architect agent — resolving the correct
   company and project first (never default to the first Paperclip company). If
   invalidated, stop immediately. Also receives post-merge drift handoffs from
-  verify-spec (never from pr-review). Use when the user says "triage this issue",
+  spec-check (never from pr-review). Use when the user says "triage this issue",
   "investigate this bug", "validate this report", or provides a bug claim to verify.
 ---
 
@@ -14,19 +14,19 @@ description: >-
 
 Analyze a claim, investigate the source, validate or invalidate, and produce an implementation-ready PRD for the architect agent.
 
-## Related: pr-review & verify-spec
+## Related: pr-review & spec-check
 
 | Situation | Skill |
 |-----------|-------|
-| PR ouverte — code + spec, gate merge | **pr-review** Step 4b (project **spec-baseline.md** when installed) |
-| Audit produit / post-merge / rapport complet | **verify-spec** |
+| PR ouverte — code + spec, gate merge | **pr-review** délègue spec à **spec-check** gate mode si installé) |
+| Audit produit / post-merge / rapport complet | **spec-check** |
 | Bug report / symptôme à valider | **paperclip-triage-issue** |
 | Drift spec sur PR ouverte | **pr-review** — fix sur la PR, **jamais triage** |
-| Drift confirmé post-merge, fix hors PR | **verify-spec** → **paperclip-triage-issue** (si user confirme) |
+| Drift confirmé post-merge, fix hors PR | **spec-check** → **paperclip-triage-issue** (si user confirme) |
 
 **pr-review** never creates Paperclip issues or hands off to triage for spec gaps — drifts become inline PR findings and `REQUEST_CHANGES`.
 
-When **verify-spec** routes here (Phase 5, post-merge only), the gap is **pre-validated**. Run triage Phase 2–3 for root cause + Fix PRD; do not re-debate whether the drift exists. Claim format: see the project's **verify-spec** skill `examples.md` when that skill is installed locally.
+When **spec-check** routes here (Phase 5, post-merge only), the gap is **pre-validated**. Run triage Phase 2–3 for root cause + Fix PRD; do not re-debate whether the drift exists. Claim format: see the project's **spec-check** skill `examples.md` when that skill is installed locally.
 
 ## Workflow
 
@@ -217,7 +217,7 @@ PRD body ends with:
 > [user's original text as blockquote]
 ```
 
-**Do not write the Fix PRD to `plan`.** The **`plan`** key is reserved for the architect's working document (may be revised to v2+). **`fix-prd`** is the spec reference for pr-review / verify-spec — convention: only triage writes it; architect must not overwrite it.
+**Do not write the Fix PRD to `plan`.** The **`plan`** key is reserved for the architect's working document (may be revised to v2+). **`fix-prd`** is the spec reference for pr-review / spec-check — convention: only triage writes it; architect must not overwrite it.
 
 3. **Assign the architect** via `PATCH /api/issues/{issueId}` with `{"assigneeAgentId": "<architect-id>"}` — only AFTER the `fix-prd` document is confirmed attached.
 
