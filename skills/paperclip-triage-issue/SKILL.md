@@ -18,7 +18,7 @@ Analyze a claim, investigate the source, validate or invalidate, and produce an 
 
 | Situation | Skill |
 |-----------|-------|
-| PR ouverte — code + spec, gate merge | **pr-review** délègue spec à **spec-check** gate mode si installé) |
+| PR ouverte — code + spec, gate merge | **pr-review** (délègue spec à **spec-check** gate mode si installé) |
 | Audit produit / post-merge / rapport complet | **spec-check** |
 | Bug report / symptôme à valider | **paperclip-triage-issue** |
 | Drift spec sur PR ouverte | **pr-review** — fix sur la PR, **jamais triage** |
