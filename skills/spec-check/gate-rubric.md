@@ -1,6 +1,6 @@
 # Verify Spec — Gate mode rubric (subagent)
 
-Used when **pr-review** delegates spec conformance on an open PR. The explore subagent runs verify-spec Phases 1–3 in gate mode and returns JSON only — no audit report, no user-facing STOP.
+Used when **pr-review** delegates spec conformance on an open PR. The explore subagent runs spec-check Phases 1–3 in gate mode and returns JSON only — no audit report, no user-facing STOP.
 
 ## Input
 

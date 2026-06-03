@@ -1,6 +1,6 @@
 # Spec Baseline
 
-Owned by **verify-spec** — single source of truth for spec resolution, conformance, and audit reporting. **pr-review** delegates spec checks here when installed; it does not duplicate this file.
+Owned by **spec-check** — single source of truth for spec resolution, conformance, and audit reporting. **pr-review** delegates spec checks here when installed; it does not duplicate this file.
 
 Communicate with the user in French when presenting results.
 
@@ -15,7 +15,7 @@ Communicate with the user in French when presenting results.
 
 **Never** report « API indisponible » without running the script.
 
-From the **verify-spec skill root** (typically `.agents/skills/verify-spec/`):
+From the **spec-check skill root** (typically `.agents/skills/spec-check/`):
 
 ```bash
 bash scripts/fetch-paperclip-spec.sh --check-auth
@@ -97,7 +97,7 @@ Resolve Paperclip company/project from `AGENTS.md` workspace facts, ClickUp fold
 
 ## Full audit report template
 
-Use for **verify-spec audit mode** Phase 4:
+Use for **spec-check audit mode** Phase 4:
 
 ```markdown
 # Rapport de conformité — [Feature title]

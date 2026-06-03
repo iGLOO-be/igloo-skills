@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fetch Paperclip issue + spec PRD for pr-review / verify-spec.
+# Fetch Paperclip issue + spec PRD for pr-review / spec-check.
 # Spec reference: fix-prd (triage) > plan revision 1 > issue description — never plan latest for gate.
 set -euo pipefail
 

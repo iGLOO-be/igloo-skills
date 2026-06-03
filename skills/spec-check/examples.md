@@ -1,8 +1,8 @@
-# Exemples — verify-spec
+# Exemples — spec-check
 
 Exemples fictifs. Chemins illustratifs — adapter au projet courant.
 
-**Rappel routing** : PR ouverte → **pr-review**. **verify-spec** = audit produit / post-merge.
+**Rappel routing** : PR ouverte → **pr-review**. **spec-check** = audit produit / post-merge.
 
 ---
 
@@ -11,23 +11,23 @@ Exemples fictifs. Chemins illustratifs — adapter au projet courant.
 **Utilisateur :**
 
 ```
-@verify-spec ClickUp TASK-1842, Paperclip IGLAA-91 — vérifie la PR #187
+@spec-check ClickUp TASK-1842, Paperclip IGLAA-91 — vérifie la PR #187
 ```
 
 **Agent :**
 
-> PR #187 encore ouverte — pour un gate merge (spec + code + commentaires GitHub), utilisez **pr-review** avec les mêmes refs ClickUp/Paperclip. **verify-spec** sert à un audit sans posting GH ou post-merge. Continuer en audit-only ?
+> PR #187 encore ouverte — pour un gate merge (spec + code + commentaires GitHub), utilisez **pr-review** avec les mêmes refs ClickUp/Paperclip. **spec-check** sert à un audit sans posting GH ou post-merge. Continuer en audit-only ?
 
 Si l'utilisateur confirme audit-only → Phase 1–4 sans posting.
 
 ---
 
-## Exemple 2 — Audit post-merge (cas nominal verify-spec)
+## Exemple 2 — Audit post-merge (cas nominal spec-check)
 
 **Utilisateur :**
 
 ```
-@verify-spec IGLAA-91 — la feature est mergée (#187), audit conformité
+@spec-check IGLAA-91 — la feature est mergée (#187), audit conformité
 ```
 
 **Agent :** spec-baseline → diff `main` sur fichiers concernés → rapport NON CONFORME → STOP → user confirme triage.
@@ -62,7 +62,7 @@ Si l'utilisateur confirme audit-only → Phase 1–4 sans posting.
 ## Exemple 4 — Claim handoff triage (post-merge uniquement)
 
 ```markdown
-## Claim (from verify-spec — post-merge)
+## Claim (from spec-check — post-merge)
 
 **Symptom** : Export CSV sans limite 10k lignes ni feedback.
 **Where** : `items.exportCsv`, `export-csv.ts`
@@ -84,7 +84,7 @@ Voir spec-baseline **Spec conflict protocol** — STOP avant matrice, demander s
 
 ## Exemple 6 — pr-review gate mode (référence croisée)
 
-Pour PR #187 ouverte, **pr-review** délègue à verify-spec gate mode ; le même AC-2 apparaît comme finding :
+Pour PR #187 ouverte, **pr-review** délègue à spec-check gate mode ; le même AC-2 apparaît comme finding :
 
 ```markdown
 #### 1. export-csv.ts:55 — [AC-2] Export row limit missing [NEW]

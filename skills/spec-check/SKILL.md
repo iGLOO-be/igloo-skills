@@ -1,5 +1,5 @@
 ---
-name: verify-spec
+name: spec-check
 description: >-
   Spec conformance owner: ClickUp/Paperclip baseline, gate-mode JSON for pr-review,
   and full product audit (matrix, drift analysis). Gate mode runs when pr-review
@@ -8,7 +8,7 @@ description: >-
   "drift analysis", or when invoked by pr-review for spec gate.
 ---
 
-# Verify Spec
+# Spec Check
 
 **Owner of all spec logic** — baseline, Paperclip fetch, conformance matrix, gate output for merge, and full audit reports.
 
@@ -16,7 +16,7 @@ Communicate with the user in French. Code citations and commit messages stay in 
 
 ## Skill root (portable)
 
-Directory containing this `SKILL.md` — when installed via `npx skills add`, typically **`.agents/skills/verify-spec/`**. Also discoverable at `.cursor/skills/verify-spec/` in projects that vendor skills locally.
+Directory containing this `SKILL.md` — when installed via `npx skills add`, typically **`.agents/skills/spec-check/`**. Also discoverable at `.cursor/skills/spec-check/` in projects that vendor skills locally.
 
 | File | Role |
 |------|------|
@@ -29,11 +29,11 @@ Directory containing this `SKILL.md` — when installed via `npx skills add`, ty
 
 | Situation | Skill |
 |-----------|-------|
-| PR ouverte, gate merge (code + spec) | **pr-review** (delegates spec to verify-spec gate mode when installed) |
-| Rapport produit complet, audit post-merge | **verify-spec** audit mode |
+| PR ouverte, gate merge (code + spec) | **pr-review** (delegates spec to spec-check gate mode when installed) |
+| Rapport produit complet, audit post-merge | **spec-check** audit mode |
 | Bug signalé / symptôme à valider | **paperclip-triage-issue** |
 | Drift spec sur PR ouverte | **pr-review** — jamais triage |
-| Drift confirmé, déjà mergé ou fix hors PR | **verify-spec** → **paperclip-triage-issue** (si user confirme) |
+| Drift confirmé, déjà mergé ou fix hors PR | **spec-check** → **paperclip-triage-issue** (si user confirme) |
 
 ## Gate mode (pr-review delegation)
 
@@ -49,7 +49,7 @@ If `conflicts` non-empty → pr-review parent STOPs and asks PO.
 
 ## Audit mode (standalone)
 
-**Trigger:** user invokes `@verify-spec` directly, or post-merge / branch / main scope.
+**Trigger:** user invokes `@spec-check` directly, or post-merge / branch / main scope.
 
 At least **one spec source** and **one implementation scope**:
 
@@ -61,7 +61,7 @@ At least **one spec source** and **one implementation scope**:
 
 If the user provides an **open PR** without audit-only intent, suggest **pr-review**:
 
-> Pour une PR ouverte avec gate merge (code + spec + commentaires GitHub), utilisez **pr-review**. **verify-spec** audit mode sert au rapport complet ou post-merge.
+> Pour une PR ouverte avec gate merge (code + spec + commentaires GitHub), utilisez **pr-review**. **spec-check** audit mode sert au rapport complet ou post-merge.
 
 ### Phase 1 — Load spec baseline
 
