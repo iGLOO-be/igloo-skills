@@ -2,14 +2,15 @@
 name: clickup-cli
 description: >-
   ClickUp via clickup-cli (CLI prioritaire, MCP en repli). Détection du CLI,
-  commandes token-efficient, conventions Foldio, et mapping CLI ↔ MCP.
-  Utiliser pour toute interaction ClickUp quand le CLI est installé, ou comme
-  fallback quand le MCP officiel est utilisé.
+  commandes token-efficient, conventions projet optionnelles (AGENTS.md,
+  .clickup.toml), et mapping CLI ↔ MCP. Utiliser pour toute interaction
+  ClickUp quand le CLI est installé, ou comme fallback quand le MCP officiel
+  est utilisé.
 ---
 
 # ClickUp CLI (prioritaire) + MCP (repli)
 
-Le CLI `clickup-cli` (alias `clkup`) est **optionnel** : certains collègues n'utilisent que le MCP officiel. Toujours tenter le CLI en premier ; basculer sur le MCP seulement si le CLI est absent, non configuré, ou si une commande échoue de façon irrécupérable.
+Le CLI `clickup-cli` (alias `clkup`) est **optionnel** : certains environnements n'ont que le MCP officiel. Toujours tenter le CLI en premier ; basculer sur le MCP seulement si le CLI est absent, non configuré, ou si une commande échoue de façon irrécupérable.
 
 ## Détection (à faire une fois par workflow)
 
@@ -66,9 +67,19 @@ EOF
 )"
 ```
 
-## Branches Foldio → task ID
+## Conventions projet (optionnel)
 
-Branches : `v<Version>/<Type>/CU-<ClickUp-ID>/<description>` (ex. `v4.36/fix/CU-86c7hyk9t/fix-Something`).
+Avant de résoudre une liste, un assigné ou un ID depuis git, lire les conventions du repo si elles existent :
+
+1. `.clickup.toml` à la racine (IDs workspace/list par défaut — sans token)
+2. `AGENTS.md` / `CONTRIBUTING.md`
+3. `.cursor/rules/` ou skill projet `.cursor/skills/clickup-cli/`
+
+Si rien n'existe : s'appuyer sur les entrées utilisateur et la hiérarchie CLI/MCP. **Ne pas** supposer de structure d'espace, de dossier ou de format de branche.
+
+## Task ID depuis git
+
+`clickup-cli` peut inférer l'ID tâche depuis la branche git courante (si le repo documente ou configure un format reconnu par le CLI).
 
 Sur une branche git, les commandes task-scoped sans ID explicite résolvent l'ID automatiquement :
 
@@ -78,6 +89,8 @@ clickup-cli comment list
 ```
 
 Désactiver ponctuellement : `CLICKUP_GIT_DETECT=0 clickup-cli task get <id>`.
+
+Si le projet ne documente pas de convention de branche → ne pas inventer de regex ; demander l'ID à l'utilisateur.
 
 ## Mapping CLI ↔ MCP
 
@@ -105,20 +118,20 @@ Désactiver ponctuellement : `CLICKUP_GIT_DETECT=0 clickup-cli task get <id>`.
 
 Le MCP offre un matching flou via `clickup_get_list`. En CLI, parcourir la hiérarchie et filtrer côté agent.
 
-**Listes sprint** (convention `v4.XX - N (MM/DD - MM/DD)`) :
+Si le projet documente un space ou folder par défaut (`.clickup.toml`, `AGENTS.md`), l'utiliser **avant** de parcourir toute la hiérarchie.
 
 ```bash
 clickup-cli space list --output json-compact
-# → id de "Foldio Development"
+# → choisir le space (nom ou id documenté dans le projet)
 
 clickup-cli folder list --space <space_id> --output json-compact
-# → id du dossier "Sprints"
+# → choisir le folder parent
 
 clickup-cli list list --folder <folder_id> --output json-compact
-# → choisir la liste dont le name contient le fragment utilisateur (ex. "v4.42")
+# → choisir la liste dont le name contient le fragment utilisateur (ex. "backlog", "sprint 42")
 ```
 
-**Autres listes** (ex. `Pending reviews`) : même principe — identifier le dossier parent, puis `list list --folder <id>` et filtrer par nom.
+Filtrer sur un **fragment fourni par l'utilisateur** (nom partiel de liste, sprint, backlog, etc.).
 
 Si la résolution CLI échoue → repli `clickup_get_list` (MCP).
 
@@ -147,16 +160,14 @@ clickup-cli member list --list <list_id> --output json-compact
 
 Matcher nom/email côté agent (préférer l'email si fourni). En cas d'ambiguïté : liste courte (nom + email + id) et demander confirmation.
 
-### Foldio (constat empirique)
+### Listes à ACL restreinte
 
-Sur les listes **Foldio Development** et **Corporate** testées (Sprints, Pending reviews, Features request, CSM), `member list --list` retourne les **8 membres** de l'équipe dev — identique au périmètre workspace pour l'usage courant.
-
-Sur une liste à ACL restreinte (ex. espace privé), le résultat peut être un **sous-ensemble** (ex. 1 seul membre). Si la personne cherchée est absente : essayer une autre liste du même space où l'équipe a accès, ou demander l'email/ID à l'utilisateur.
+Sur une liste à accès limité (ex. espace privé), `member list --list` peut retourner un **sous-ensemble** des membres du workspace. Si la personne cherchée est absente : essayer une autre liste du même space où l'équipe a accès, ou demander l'email/ID à l'utilisateur.
 
 ### Ce qui ne fonctionne pas en CLI
 
 - `member list` sans `--list` / `--task`
-- `user get <id>` sur notre plan (403 Enterprise)
+- `user get <id>` indisponible sur certains plans ClickUp (403)
 - `group list` comme source d'assignés (groupes incomplets)
 
 **Ne jamais** passer un nom dans `--assignee` — toujours un ID numérique.
