@@ -2,18 +2,19 @@
 
 Runtime state lives at `.planning/pipeline/{slug}/state.json`.
 
-The orchestrator parent is the **only** writer of `state.json`. Subagents return JSON in chat; parent merges into state.
+The orchestrator parent is the **only** writer of `state.json`. Subagents write phase artifacts (`fix-prd.md`, `plan.md`, `delivery.md`, `escalation.md`) and return **thin JSON**; parent merges metadata into state and writes merged `review.md`.
 
 ## File layout
 
 ```
 .planning/pipeline/{slug}/
 ├── state.json       # machine state (required for resume)
-├── intake.md        # original user request
-├── fix-prd.md       # triage output (optional)
-├── plan.md          # architect output (optional)
-├── delivery.md      # junior-dev output (optional)
-└── review.md        # review output (optional)
+├── intake.md        # original user request (parent)
+├── fix-prd.md       # triage output (subagent; optional / skipped in lite)
+├── plan.md          # architect output (subagent)
+├── delivery.md      # junior-dev final batch (subagent)
+├── escalation.md    # junior blocker (subagent; ephemeral)
+└── review.md        # parent merge of review JSON
 ```
 
 `.planning/` is excluded from Biome — safe for pipeline artifacts.
@@ -35,7 +36,8 @@ The orchestrator parent is the **only** writer of `state.json`. Subagents return
     "fixPrd": ".planning/pipeline/oauth-error-alert/fix-prd.md",
     "plan": ".planning/pipeline/oauth-error-alert/plan.md",
     "delivery": null,
-    "review": null
+    "review": null,
+    "escalation": null
   },
   "checkpoints": {
     "cp0": { "status": "approved", "at": "2026-06-10T14:05:00.000Z" },
@@ -46,10 +48,14 @@ The orchestrator parent is the **only** writer of `state.json`. Subagents return
     "cp4": null
   },
   "meta": {
+    "lite": false,
     "taskCount": 8,
     "migration": false,
     "escalations": 0,
-    "branch": "fix/oauth-error-alert"
+    "branch": "fix/oauth-error-alert",
+    "implementBatches": 3,
+    "currentBatch": 2,
+    "tasksCompleted": [1, 2, 3, 4, 5, 6]
   }
 }
 ```
@@ -59,9 +65,20 @@ The orchestrator parent is the **only** writer of `state.json`. Subagents return
 | Field | Values | Notes |
 |-------|--------|-------|
 | `inputType` | `bug`, `feature`, `fix-prd`, `plan`, `resume` | Set at intake |
-| `startPhase` | `triage`, `architect`, `implement`, `review` | Frozen at creation |
+| `startPhase` | `triage`, `architect`, `implement`, `review` | Frozen at creation; `--lite` → `architect` |
 | `phase` | See phase enum below | Updated after each step |
 | `outcome` | `null`, `complete`, `invalidated`, `abandoned`, `wip` | Set at terminal states |
+| `meta.lite` | `true` / `false` | Skip triage + spec review; single-shot junior |
+| `meta.implementBatches` | number | Planned junior batches (`1` if single-shot) |
+| `meta.tasksCompleted` | number[] | Cumulative §9 task ids done |
+
+### Checkpoint status
+
+| `status` | Meaning |
+|----------|---------|
+| `approved` | User approved |
+| `rejected` / `abandoned` / `iterated` | User declined / stopped / asked rework |
+| `skipped` | Auto-skipped (e.g. CP1 under `--lite`) |
 
 ### Phase enum
 
@@ -80,19 +97,20 @@ The orchestrator parent is the **only** writer of `state.json`. Subagents return
 Priority (first match):
 
 1. CLI `--from=triage|architect|implement|review`
-2. Resume: compute from `phase` + missing checkpoints (see `nextPhase`)
-3. Input path is existing `plan.md` → `implement` (CP2 still required if not approved)
-4. Input path is existing PRD / `fix-prd.md` → `architect`
-5. Artifact detection in pipeline dir (resume):
+2. `--lite` on new description → `architect` (set `meta.lite`, CP1 `skipped`)
+3. Resume: compute from `phase` + missing checkpoints (see `nextPhase`)
+4. Input path is existing `plan.md` → `implement` (CP2 still required if not approved)
+5. Input path is existing PRD / `fix-prd.md` → `architect`
+6. Artifact detection in pipeline dir (resume):
    - `fix-prd.md` without `plan.md` → `architect` (after CP1 if pending)
    - `plan.md` without CP2 approved → `architect` (CP2 gate)
-6. **New description** (no resume, no PRD/plan path) → **`triage`** always
+7. **New description** (no `--lite`) → **`triage`** always
 
-`inputType` (`bug` | `feature`) is set at triage classification — it does **not** skip triage for features.
+`inputType` (`bug` | `feature`) is set at triage classification — it does **not** skip triage for features unless `--lite`.
 
 **Important:** `--from=implement` with existing `plan.md` still requires **CP2 approved** in `checkpoints.cp2`. If missing, run CP2 before Step 3.
 
-**Important:** `--from=architect` with only `intake.md` is invalid for new work — run triage first unless user supplies an existing PRD file.
+**Important:** `--from=architect` with only `intake.md` is invalid for new work **unless** `--lite` or user supplies an existing PRD file.
 
 ## Resume logic
 
@@ -102,7 +120,8 @@ function nextPhase(state):
   if state.outcome in ('invalidated', 'abandoned', 'complete'): return null
 
   if not checkpoints.cp0: return 'intake'
-  if startPhase == 'triage' and not checkpoints.cp1: return 'triage' # CP1 pending
+  if startPhase == 'triage' and not checkpoints.cp1: return 'triage' # CP1 pending (skipped counts as done)
+  if checkpoints.cp1.status == 'skipped': treat as passed
   if not artifacts.plan and needsArchitect(state): return 'architect'
   if not checkpoints.cp2: return 'architect' # CP2 pending on plan
   if not artifacts.delivery and needsImplement(state): return 'implement'

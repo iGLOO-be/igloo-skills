@@ -23,23 +23,23 @@ Creates:
 
 ## Step 1 — Triage subagent
 
-Reads `paperclip-triage-issue`, investigates `OAuthErrorAlert`, login flow.
+Reads pipeline `briefs/triage.md`, investigates `OAuthErrorAlert`, login flow.
 
-Returns `verdict: validated` + Fix PRD.
+Writes `fix-prd.md` on disk; returns thin JSON (`verdict`, `summary` only).
 
 **CP1:** User reads summary, opens `fix-prd.md`, selects *Approuver — architecte*.
 
 ## Step 2 — Architect subagent
 
-Reads Fix PRD, maps to `LoginForm`, i18n keys, auth guards.
+Reads Fix PRD from disk, maps to `LoginForm`, i18n keys, auth guards.
 
-Writes `plan.md` — 6 tasks, no migration.
+Writes `plan.md` — 6 tasks, no migration. Thin JSON: `taskCount`, risks, path.
 
 **CP2:** User approves plan.
 
-## Step 3 — Junior-dev subagent
+## Step 3 — Junior-dev (batched)
 
-Implements task-by-task. Runs `pnpm check`. Writes `delivery.md`.
+`taskCount` 6 → two batches of 3 (sequential). Final batch writes `delivery.md`, runs `pnpm check`.
 
 **CP3:** User approves → review.
 
@@ -50,6 +50,8 @@ Parallel subagents on `git diff main...HEAD`:
 - **Review-code:** 0 critical code findings.
 - **Review-spec:** baseline `fix-prd.md` §7 AC — CONFORME.
 
+Parent merges → `review.md`.
+
 **CP4:** User selects *Create PR* → orchestrator follows PR creation rules separately.
 
 Final `state.json`:
@@ -58,6 +60,7 @@ Final `state.json`:
 {
   "phase": "done",
   "outcome": "complete",
+  "meta": { "lite": false, "implementBatches": 2, "tasksCompleted": [1, 2, 3, 4, 5, 6] },
   "checkpoints": {
     "cp0": { "status": "approved" },
     "cp1": { "status": "approved" },
@@ -67,6 +70,14 @@ Final `state.json`:
   }
 }
 ```
+
+## Lite variant
+
+```
+feature-pipeline --lite --slug=oauth-error-alert …
+```
+
+Skips triage (CP1 `skipped`), starts at architect with `intake.md`, single-shot junior, code review only (`spec: skipped-lite`).
 
 ## Resume example
 
