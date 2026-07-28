@@ -32,8 +32,9 @@ On reject/abandon:
 **Present before asking:**
 
 - Slug: `{slug}`
-- Type: `{bug | feature | fix-prd | plan-resume}` — nouvelle description → **`triage`**
+- Type: `{bug | feature | fix-prd | plan-resume}` — nouvelle description → **`triage`** (ou **`architect`** si `--lite`)
 - Phase de départ: `{startPhase}`
+- Mode: `{full | lite}` — lite = pas de triage, junior single-shot, review code seule
 - Répertoire: `.planning/pipeline/{slug}/`
 
 ---
@@ -61,7 +62,7 @@ On reject/abandon:
 
 ## CP1 — PRD (post-triage)
 
-**When:** Step 1 complete, verdict `validated`.
+**When:** Step 1 complete, verdict `validated`. **Skip AskQuestion when `meta.lite`** — already recorded as `checkpoints.cp1.status = skipped`.
 
 **Prompt:** `Le PRD est prêt. Que faire ?`
 
@@ -148,8 +149,8 @@ If subagent returned `invalidated` → skip AskQuestion; explain and **STOP**.
 | `pr` | Créer une PR (uniquement si l'utilisateur le choisit explicitement) |
 | `done` | Terminer sans commit/PR (Recommended si review OK et pas prêt à merger) |
 
-**Present:** Spec verdict (CONFORME / PARTIELLEMENT / NON CONFORME) + Critical / Warning / Note counts (code + spec) + link to `review.md`.
+**Present:** Spec verdict (CONFORME / PARTIELLEMENT / NON CONFORME / `skipped-lite`) + Critical / Warning / Note counts (code + spec if any) + link to `review.md`.
 
-**Block *done* recommendation** when any Critical spec ❌ or Critical code finding remains unresolved.
+**Block *done* recommendation** when any Critical spec ❌ or Critical code finding remains unresolved. In lite mode, only Critical **code** findings block *done*.
 
 **Never** auto-select `commit` or `pr` — user must pick explicitly.
