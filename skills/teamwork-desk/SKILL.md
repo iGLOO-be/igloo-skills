@@ -5,63 +5,81 @@ description: Query and interact with Teamwork Desk API v2 for support ticket man
 
 # Teamwork Desk
 
-## Prérequis
+CLI Python **stdlib uniquement** (pas de `pip install`, pas de venv). Toujours préférer le CLI au curl brut.
 
-Le CLI Python requiert `requests` :
+## Détection (une fois par workflow)
 
 ```bash
-pip install requests
+# Emplacement du skill
+SKILL_DIR="${TEAMWORK_DESK_SKILL_DIR:-$HOME/.agents/skills/teamwork-desk}"
+# Depuis ce dépôt (igloo-skills) :
+# SKILL_DIR="$(git -C /path/to/igloo-skills rev-parse --show-toplevel)/skills/teamwork-desk"
+
+DESK="python3 ${SKILL_DIR}/support-cli.py"
+# Raccourci optionnel : ${SKILL_DIR}/desk (wrapper)
+
+# Config OK ? (exit 0 = prêt, exit 2 = domaine/clé manquants)
+$DESK auth check
+
+# Valider aussi le token API (réseau requis)
+$DESK auth check --probe
 ```
+
+| Résultat | Mode |
+|---|---|
+| `auth check` exit 0 | **CLI** — enchaîner scan / read / … |
+| exit 2 | **STOP** — voir Configuration ci-dessous |
+| `--probe` exit 1 | clés présentes mais API refusée / réseau |
+
+**Agents :** ne jamais lancer `pip install requests` en runtime. Si `auth check` échoue, exécuter depuis la racine du projet où se trouve `.env` (ex. monorepo Foldio) ou alimenter `~/.config/teamwork-desk/credentials`.
 
 ## Configuration
 
-Requires two env vars (check env, ask user if missing):
+Ordre de résolution (le shell gagne toujours) :
 
-| Variable | Description | Example |
+1. Variables d’environnement déjà définies
+2. Fichier `.env` remonté depuis le répertoire courant (jusqu’à 5 parents)
+3. `~/.config/teamwork-desk/credentials` (même format `KEY=value`)
+
+| Variable | Obligatoire | Description |
 |---|---|---|
-| `TEAMWORK_DESK_DOMAIN` | Subdomain | `mycompany.teamwork.com` |
-| `TEAMWORK_DESK_API_KEY` | API key (Bearer token) | `tkn_...` |
+| `TEAMWORK_DESK_DOMAIN` | oui | Hôte Desk, ex. `company.teamwork.com` |
+| `TEAMWORK_DESK_API_KEY` | oui | Token Bearer `tkn_…` |
+| `TEAMWORK_DESK_INBOX_ID` | non | Inbox par défaut pour `scan` si `--inbox-id` omis |
+
+Exemple Foldio : les trois clés sont documentées dans `.env.example` à la racine du monorepo ; le CLI les charge automatiquement si la commande est lancée depuis ce répertoire (ou un sous-dossier).
 
 ## Emplacement (portable)
 
-Racine du skill : **`skills/teamwork-desk/`** (dans ce dépôt ou tout clone du bundle de skills).
+Racine du skill : **`skills/teamwork-desk/`** dans [igloo-skills](https://github.com/) ou copie Cursor `~/.agents/skills/teamwork-desk/`.
 
-Dans ce dépôt, un symlink **`.cursor/skills/teamwork-desk`** pointe vers `skills/teamwork-desk/` pour la découverte automatique par Cursor.
+Symlink optionnel dans un dépôt : `.cursor/skills/teamwork-desk` → `skills/teamwork-desk/`.
 
-## CLI (primary interface)
+Script principal : `support-cli.py`. Wrapper court : `desk`.
 
-Always prefer the CLI over raw curl. It handles auth, filtering, pagination, name resolution, and formatted output.
-
-The CLI script `support-cli.py` is co-located with this SKILL.md.
-
-**Depuis la racine du dépôt** (où se trouve le dossier `skills/`) :
+## CLI (interface principale)
 
 ```bash
-python3 skills/teamwork-desk/support-cli.py --help
+$DESK --help
 ```
-
-**Depuis le dossier du skill** (`skills/teamwork-desk/`) :
-
-```bash
-python3 support-cli.py --help
-```
-
-**Chemin canonique** : `skills/teamwork-desk/support-cli.py`
 
 ### scan — List tickets
 
 ```bash
 # Active tickets in an inbox (last 14 days)
-python3 skills/teamwork-desk/support-cli.py scan --inbox-id 4364 --status active --days 14
+$DESK scan --inbox-id 4364 --status active --days 14
 
 # Active + Waiting on customer
-python3 skills/teamwork-desk/support-cli.py scan --inbox-id 4364 --status active,waiting
+$DESK scan --inbox-id 4364 --status active,waiting
 
 # All statuses, last 30 days, max 10 rows
-python3 skills/teamwork-desk/support-cli.py scan --inbox-id 4364 --days 30 --limit 10
+$DESK scan --inbox-id 4364 --days 30 --limit 10
 
 # No date filter (latest 50)
-python3 skills/teamwork-desk/support-cli.py scan --inbox-id 4364 --days 0
+$DESK scan --inbox-id 4364 --days 0
+
+# Inbox depuis TEAMWORK_DESK_INBOX_ID dans .env
+$DESK scan --status active --days 7
 ```
 
 **Status names for `--status`:** `active`(1), `waiting`(3), `on-hold`(4), `solved`(5), `closed`(6), `spam`(7)
@@ -70,13 +88,13 @@ python3 skills/teamwork-desk/support-cli.py scan --inbox-id 4364 --days 0
 
 ```bash
 # Full ticket: header + all messages
-python3 skills/teamwork-desk/support-cli.py read 92325990
+$DESK read 92325990
 
 # Internal notes only
-python3 skills/teamwork-desk/support-cli.py read 92325990 --notes-only
+$DESK read 92325990 --notes-only
 
 # Header only (skip messages)
-python3 skills/teamwork-desk/support-cli.py read 92325990 --no-messages
+$DESK read 92325990 --no-messages
 ```
 
 **threadType values** (shown in message output):
@@ -92,10 +110,10 @@ python3 skills/teamwork-desk/support-cli.py read 92325990 --no-messages
 
 ```bash
 # Inline HTML body
-python3 skills/teamwork-desk/support-cli.py post-note 92325990 --body '<p>Analysis here.</p>'
+$DESK post-note 92325990 --body '<p>Analysis here.</p>'
 
 # From stdin (pipe)
-echo '<p>Note content</p>' | python3 skills/teamwork-desk/support-cli.py post-note 92325990
+echo '<p>Note content</p>' | $DESK post-note 92325990
 ```
 
 > **CRITICAL — HTML required:** The note body MUST contain **HTML markup**, not plain text.
@@ -137,13 +155,13 @@ echo '<p>Note content</p>' | python3 skills/teamwork-desk/support-cli.py post-no
 
 ```bash
 # Change status
-python3 skills/teamwork-desk/support-cli.py update 92325990 --status solved
+$DESK update 92325990 --status solved
 
 # Assign agent
-python3 skills/teamwork-desk/support-cli.py update 92325990 --agent 461854
+$DESK update 92325990 --agent 461854
 
 # Multiple fields at once
-python3 skills/teamwork-desk/support-cli.py update 92325990 --status on-hold --agent 461854 --priority high
+$DESK update 92325990 --status on-hold --agent 461854 --priority high
 ```
 
 ## Output guidelines
@@ -155,7 +173,7 @@ python3 skills/teamwork-desk/support-cli.py update 92325990 --status on-hold --a
 
 ## API Reference (curl fallback)
 
-> Prefer the CLI above. Use curl only for operations not covered by the CLI.
+> Prefer the CLI above. Use curl only if the CLI is broken and the user accepts manual auth.
 
 Base URL: `https://{TEAMWORK_DESK_DOMAIN}/desk/api/v2`
 
