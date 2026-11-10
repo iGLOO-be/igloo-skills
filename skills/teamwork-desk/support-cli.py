@@ -3,6 +3,7 @@
 Support CLI – Teamwork Desk ticket operations.
 
 Commands:
+  auth check    Verify credentials (optional API probe)
   scan          List tickets (filterable by inbox, status, days)
   read          Show ticket detail + message threads
   post-note     Post an internal HTML note on a ticket
@@ -15,10 +16,139 @@ import re
 import html as html_mod
 import argparse
 import os
-import requests
+import urllib.error
+import urllib.parse
+import urllib.request
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from dataclasses import dataclass
+
+DESK_ENV_KEYS = ("TEAMWORK_DESK_DOMAIN", "TEAMWORK_DESK_API_KEY", "TEAMWORK_DESK_INBOX_ID")
+_ENV_SEARCHED: List[str] = []
+_ENV_LOADED_FROM: Optional[str] = None
+
+
+def _parse_env_text(text: str) -> None:
+    """Inject DESK_ENV_KEYS into os.environ when not already set."""
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[7:].strip()
+        eq = line.find("=")
+        if eq < 1:
+            continue
+        key = line[:eq].strip()
+        if key not in DESK_ENV_KEYS or key in os.environ:
+            continue
+        val = line[eq + 1 :].strip()
+        if val and val[0] in "\"'" and val[0] in val[1:]:
+            q = val[0]
+            end = val.find(q, 1)
+            val = val[1:end] if end > 0 else val[1:]
+        os.environ[key] = val
+
+
+def _try_load_env_file(path: Path) -> bool:
+    global _ENV_LOADED_FROM
+    _ENV_SEARCHED.append(str(path))
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as e:
+        if e.errno not in (2, 21, 20):  # ENOENT, EISDIR, ENOTDIR
+            raise
+        return False
+    before = {k: os.environ.get(k) for k in DESK_ENV_KEYS}
+    _parse_env_text(text)
+    loaded_any = any(os.environ.get(k) != before.get(k) for k in DESK_ENV_KEYS)
+    if loaded_any and _ENV_LOADED_FROM is None:
+        _ENV_LOADED_FROM = str(path)
+    return loaded_any
+
+
+def _load_desk_env() -> None:
+    """Load TEAMWORK_DESK_* from parent .env files and optional credentials file."""
+    global _ENV_LOADED_FROM
+    start = Path.cwd().resolve()
+    for _ in range(6):
+        _try_load_env_file(start / ".env")
+        parent = start.parent
+        if parent == start:
+            break
+        start = parent
+
+    creds = Path.home() / ".config" / "teamwork-desk" / "credentials"
+    _try_load_env_file(creds)
+
+
+def _mask_api_key(key: str) -> str:
+    if not key:
+        return "(vide)"
+    if len(key) <= 4:
+        return "…" + key
+    return "…" + key[-4:]
+
+
+def _config_error_message() -> str:
+    lines = [
+        "ERREUR: TEAMWORK_DESK_DOMAIN et TEAMWORK_DESK_API_KEY requis.",
+        "",
+        "Sources consultées (l’environnement shell prime toujours) :",
+    ]
+    if _ENV_SEARCHED:
+        for p in _ENV_SEARCHED:
+            lines.append(f"  - {p}")
+    else:
+        lines.append("  - (aucun fichier .env / credentials testé)")
+    if _ENV_LOADED_FROM:
+        lines.append(f"Variables chargées depuis : {_ENV_LOADED_FROM}")
+    lines.extend(
+        [
+            "",
+            "Astuce : depuis un monorepo Foldio, exécuter le CLI depuis la racine où se trouve .env",
+            "ou créer ~/.config/teamwork-desk/credentials avec TEAMWORK_DESK_DOMAIN=… et TEAMWORK_DESK_API_KEY=…",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _http_json(
+    url: str,
+    method: str,
+    headers: Dict[str, str],
+    *,
+    params: Optional[Dict[str, Any]] = None,
+    json_body: Optional[Dict[str, Any]] = None,
+    timeout: int = 60,
+) -> Dict[str, Any]:
+    if params:
+        query = urllib.parse.urlencode({k: str(v) for k, v in params.items() if v is not None})
+        url = f"{url}?{query}" if query else url
+    data: Optional[bytes] = None
+    hdrs = dict(headers)
+    if json_body is not None:
+        data = json.dumps(json_body).encode("utf-8")
+        hdrs.setdefault("Content-Type", "application/json")
+    req = urllib.request.Request(url, data=data, headers=hdrs, method=method.upper())
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            raw = resp.read().decode("utf-8")
+            return json.loads(raw) if raw.strip() else {}
+    except urllib.error.HTTPError as e:
+        detail = ""
+        try:
+            detail = e.read().decode("utf-8", errors="replace")[:500]
+        except Exception:
+            pass
+        msg = f"HTTP {e.code} {e.reason}"
+        if detail:
+            msg += f": {detail}"
+        raise RuntimeError(msg) from e
+    except urllib.error.URLError as e:
+        raise RuntimeError(f"Connexion: {e.reason}") from e
+
 
 @dataclass
 class TeamworkConfig:
@@ -37,9 +167,18 @@ class SupportCLI:
         domain = os.getenv("TEAMWORK_DESK_DOMAIN")
         api_key = os.getenv("TEAMWORK_DESK_API_KEY")
         if not domain or not api_key:
-            print("ERREUR: TEAMWORK_DESK_DOMAIN et TEAMWORK_DESK_API_KEY requis", file=sys.stderr)
+            print(_config_error_message(), file=sys.stderr)
             sys.exit(1)
-        return TeamworkConfig(domain=domain, api_key=api_key)
+        return TeamworkConfig(domain=domain.strip(), api_key=api_key.strip())
+
+    @staticmethod
+    def peek_config() -> Tuple[Optional[str], Optional[str]]:
+        domain = os.getenv("TEAMWORK_DESK_DOMAIN")
+        api_key = os.getenv("TEAMWORK_DESK_API_KEY")
+        return (
+            domain.strip() if domain else None,
+            api_key.strip() if api_key else None,
+        )
 
     # -- helpers -------------------------------------------------------------
 
@@ -142,9 +281,7 @@ class SupportCLI:
         if clauses:
             params["filter"] = json.dumps({"$and": clauses} if len(clauses) > 1 else clauses[0])
         try:
-            r = requests.get(self._url("tickets.json"), params=params, headers=self._headers())
-            r.raise_for_status()
-            return r.json()
+            return _http_json(self._url("tickets.json"), "GET", self._headers(), params=params)
         except Exception as e:
             print(f"Erreur list_tickets: {e}", file=sys.stderr)
             return None
@@ -155,13 +292,12 @@ class SupportCLI:
 
     def get_ticket(self, ticket_id: int) -> Optional[Dict[str, Any]]:
         try:
-            r = requests.get(
+            return _http_json(
                 self._url(f"tickets/{ticket_id}.json"),
+                "GET",
+                self._headers(),
                 params={"includes": "customers,inboxes,users,tags,ticketstatuses"},
-                headers=self._headers(),
             )
-            r.raise_for_status()
-            return r.json()
         except Exception as e:
             print(f"Erreur get_ticket: {e}", file=sys.stderr)
             return None
@@ -180,13 +316,12 @@ class SupportCLI:
         if thread_type is not None:
             params["filter"] = json.dumps({"threadType": thread_type})
         try:
-            r = requests.get(
+            return _http_json(
                 self._url(f"tickets/{ticket_id}/messages.json"),
+                "GET",
+                self._headers(),
                 params=params,
-                headers=self._headers(),
             )
-            r.raise_for_status()
-            return r.json()
         except Exception as e:
             print(f"Erreur get_messages: {e}", file=sys.stderr)
             return None
@@ -197,13 +332,12 @@ class SupportCLI:
 
     def post_note(self, ticket_id: int, html_body: str) -> Optional[Dict[str, Any]]:
         try:
-            r = requests.post(
+            return _http_json(
                 self._url(f"tickets/{ticket_id}/messages.json"),
-                json={"message": html_body, "threadType": "note"},
-                headers=self._headers(post=True),
+                "POST",
+                self._headers(post=True),
+                json_body={"message": html_body, "threadType": "note"},
             )
-            r.raise_for_status()
-            return r.json()
         except Exception as e:
             print(f"Erreur post_note: {e}", file=sys.stderr)
             return None
@@ -227,13 +361,12 @@ class SupportCLI:
             print("Rien à mettre à jour.", file=sys.stderr)
             return None
         try:
-            r = requests.patch(
+            return _http_json(
                 self._url(f"tickets/{ticket_id}.json"),
-                json={"ticket": ticket_body},
-                headers=self._headers(post=True),
+                "PATCH",
+                self._headers(post=True),
+                json_body={"ticket": ticket_body},
             )
-            r.raise_for_status()
-            return r.json()
         except Exception as e:
             print(f"Erreur update_ticket: {e}", file=sys.stderr)
             return None
@@ -337,6 +470,34 @@ class SupportCLI:
             print()
 
 
+def _run_auth_check(probe: bool) -> int:
+    domain, api_key = SupportCLI.peek_config()
+    ok = bool(domain and api_key)
+    print("Teamwork Desk — auth check")
+    print(f"  domain   : {domain or '(manquant)'}")
+    print(f"  api_key  : {_mask_api_key(api_key or '')}")
+    inbox = os.getenv("TEAMWORK_DESK_INBOX_ID")
+    if inbox:
+        print(f"  inbox_id : {inbox} (défaut scan)")
+    if _ENV_LOADED_FROM:
+        print(f"  chargé   : {_ENV_LOADED_FROM}")
+    elif _ENV_SEARCHED:
+        print("  chargé   : (uniquement variables shell — aucun fichier n’a fourni de clés)")
+    if not ok:
+        print(_config_error_message(), file=sys.stderr)
+        return 2
+    if not probe:
+        print("  statut   : OK (config présente)")
+        return 0
+    cli = SupportCLI()
+    payload = cli.list_tickets(days=None, page_size=1)
+    if payload is None:
+        print("  statut   : ÉCHEC (appel API tickets)", file=sys.stderr)
+        return 1
+    print("  statut   : OK (API joignable)")
+    return 0
+
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
@@ -359,12 +520,20 @@ def _parse_status_list(raw: str) -> List[int]:
 
 
 def main():
+    _load_desk_env()
+
     parser = argparse.ArgumentParser(
         description="Support CLI – Teamwork Desk ticket operations",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="Status names: active(1), waiting(3), on-hold(4), solved(5), closed(6), spam(7)",
     )
     sub = parser.add_subparsers(dest="command")
+
+    # -- auth ----------------------------------------------------------------
+    p_auth = sub.add_parser("auth", help="Authentication / configuration")
+    auth_sub = p_auth.add_subparsers(dest="auth_command")
+    p_check = auth_sub.add_parser("check", help="Verify domain + API key (exit 0 = OK)")
+    p_check.add_argument("--probe", action="store_true", help="Call tickets API to validate the token")
 
     # -- scan ----------------------------------------------------------------
     p_scan = sub.add_parser("scan", help="List tickets")
@@ -399,13 +568,24 @@ def main():
         parser.print_help()
         return
 
+    if args.command == "auth":
+        if args.auth_command == "check":
+            sys.exit(_run_auth_check(args.probe))
+        p_auth.print_help()
+        sys.exit(1)
+
     cli = SupportCLI()
 
     # -- scan ----------------------------------------------------------------
     if args.command == "scan":
         status_ids = _parse_status_list(args.status) if args.status else None
         days = args.days if args.days > 0 else None
-        payload = cli.list_tickets(args.inbox_id, status_ids=status_ids, days=days, page_size=args.page_size)
+        inbox_id = args.inbox_id
+        if inbox_id is None:
+            env_inbox = os.getenv("TEAMWORK_DESK_INBOX_ID")
+            if env_inbox and env_inbox.strip().isdigit():
+                inbox_id = int(env_inbox.strip())
+        payload = cli.list_tickets(inbox_id, status_ids=status_ids, days=days, page_size=args.page_size)
         if not payload:
             sys.exit(1)
         tickets = payload.get("tickets") or []
